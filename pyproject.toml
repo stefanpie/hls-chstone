@@ -1,0 +1,9 @@
+[project]
+name = "hls-chstone"
+version = "0.1.0"
+description = "Reproducable HLS benchamrk derrived from CHStone"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pcpp>=1.30",
+]

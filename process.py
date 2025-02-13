@@ -33,7 +33,12 @@ def get_vitis_hls_dist_path() -> Path:
 def get_vitis_hls_clang_format_path() -> Path:
     vitis_hls_dist_path = get_vitis_hls_dist_path()
     vitis_hls_clang_format_path = (
-        vitis_hls_dist_path / "lnx64" / "tools" / "clang-3.9" / "bin" / "clang-format"
+        vitis_hls_dist_path
+        / "lnx64"
+        / "tools"
+        / "clang-3.9-csynth"
+        / "bin"
+        / "clang-format"
     )
     if not vitis_hls_clang_format_path.exists():
         raise RuntimeError(
@@ -52,6 +57,25 @@ def get_vitis_hls_clang_format_path() -> Path:
 #             f"Could not find vitis_hls include dir at {vitis_hls_include_dir}"
 #         )
 #     return vitis_hls_include_dir
+
+
+def get_vitis_hls_lib_paths() -> list[Path]:
+    vitis_hls_bin_path_str = shutil.which("vitis_hls")
+    if vitis_hls_bin_path_str is None:
+        raise RuntimeError("vitis_hls not found in PATH")
+    vitis_hls_bin_path = Path(vitis_hls_bin_path_str)
+
+    lib_paths = []
+
+    # /tools/software/xilinx/Vitis_HLS/2024.1/lib/lnx64.o/libxv_hls_llvm3.1.so
+    lib_path = vitis_hls_bin_path.parent.parent / "lib" / "lnx64.o"
+    lib_paths.append(lib_path)
+
+    # /tools/software/xilinx/Vitis_HLS/2024.1/lnx64/lib/csim
+    lib_path = vitis_hls_bin_path.parent.parent / "lnx64" / "lib" / "csim"
+    lib_paths.append(lib_path)
+
+    return lib_paths
 
 
 class SuppressOutput:
@@ -104,18 +128,29 @@ def process_fp_kernel(kernel_dir: Path):
     )
     kernel_c_pp.write_text(txt)
 
+    lib_paths = get_vitis_hls_lib_paths()
+    env = os.environ.copy()
+    for lib_path in lib_paths:
+        old = env.get("LD_LIBRARY_PATH")
+        if old:
+            env["LD_LIBRARY_PATH"] = old + ":" + str(lib_path.resolve())
+        else:
+            env["LD_LIBRARY_PATH"] = str(lib_path.resolve())
+
     clang_format_path = get_vitis_hls_clang_format_path()
     # tab size if 4 spaces
     # clang_format_cmd = [str(clang_format_path), "-i", str(kernel_c_pp.name)]
     # print(clang_format_cmd)
-    clang_format_cmd = [
+    clang_format_cmd: list[str] = [
         str(clang_format_path),
         # -style="{IndentWidth: 4}"
         "-style={BasedOnStyle: LLVM, IndentWidth: 4}",
         "-i",
         str(kernel_c_pp.name),
     ]
-    p = subprocess.run(clang_format_cmd, cwd=kernel_dir, capture_output=True, text=True)
+    p = subprocess.run(
+        clang_format_cmd, cwd=kernel_dir, capture_output=True, text=True, env=env
+    )
     if p.returncode != 0:
         print(p.stdout)
         print(p.stderr)

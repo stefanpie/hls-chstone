@@ -1,3 +1,5 @@
 .vscode
 .mypy_cache
 test_temp_synth
+
+hls-chstone/tmp
